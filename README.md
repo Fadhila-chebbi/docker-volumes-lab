@@ -282,3 +282,243 @@ total 0
 
 
 
+\## 8. TP 5.2 – Sauvegarde et Restauration d'un volume Docker
+
+
+
+\### 8.1 Préparation des données
+
+
+
+Utilisation du volume `pgdata` avec PostgreSQL.
+
+
+
+Insertion de trois lignes dans la table `notes` :
+
+
+
+```powershell
+
+docker exec db-lab psql -U etudiant -d cours -c "INSERT INTO notes (texte) VALUES ('deuxieme note'), ('troisieme note');"
+
+```
+
+
+
+Vérification :
+
+
+
+```text
+
+&#x20;count
+
+\-------
+
+&#x20;    3
+
+```
+
+
+
+\### 8.2 Arrêt du conteneur PostgreSQL
+
+
+
+```powershell
+
+docker stop db-lab
+
+```
+
+
+
+\### 8.3 Création de la sauvegarde
+
+
+
+Création d'une archive compressée du volume `pgdata` :
+
+
+
+```powershell
+
+docker run --rm -v pgdata:/data:ro -v "${PWD}/sauvegardes:/backup" alpine:3.20 tar czf /backup/pgdata.tar.gz -C /data .
+
+```
+
+
+
+Vérification de l'archive :
+
+
+
+```powershell
+
+Get-Item .\\sauvegardes\\pgdata.tar.gz | Select-Object Name, Length
+
+```
+
+
+
+\*\*Résultat :\*\* le fichier `pgdata.tar.gz` a été créé avec succès.
+
+
+
+\### 8.4 Simulation de perte des données
+
+
+
+Suppression du conteneur :
+
+
+
+```powershell
+
+docker rm db-lab
+
+```
+
+
+
+Suppression du volume original :
+
+
+
+```powershell
+
+docker volume rm pgdata
+
+```
+
+
+
+\*\*Résultat :\*\* le volume original a été supprimé. La sauvegarde reste disponible dans le dossier `sauvegardes`.
+
+
+
+\### 8.5 Restauration dans un nouveau volume
+
+
+
+Création du volume de restauration :
+
+
+
+```powershell
+
+docker volume create pgdata-restaure
+
+```
+
+
+
+Extraction de l'archive dans le nouveau volume :
+
+
+
+```powershell
+
+docker run --rm -v pgdata-restaure:/data -v "${PWD}/sauvegardes:/backup" alpine:3.20 tar xzf /backup/pgdata.tar.gz -C /data
+
+```
+
+
+
+Lancement du nouveau conteneur PostgreSQL :
+
+
+
+```powershell
+
+docker run -d --name db-lab `
+
+\-e POSTGRES\_USER=etudiant `
+
+\-e POSTGRES\_PASSWORD=motdepasse-tp `
+
+\-e POSTGRES\_DB=cours `
+
+\-v pgdata-restaure:/var/lib/postgresql/data `
+
+postgres:16-alpine
+
+```
+
+
+
+Vérification des journaux :
+
+
+
+```text
+
+PostgreSQL Database directory appears to contain a database; Skipping initialization
+
+database system is ready to accept connections
+
+```
+
+
+
+\*\*Résultat :\*\* PostgreSQL a retrouvé la base de données existante sans effectuer une nouvelle initialisation.
+
+
+
+\### 8.6 Vérification de l'intégrité des données
+
+
+
+Vérification du nombre de lignes :
+
+
+
+```powershell
+
+docker exec db-lab psql -U etudiant -d cours -c "SELECT count(\*) FROM notes;"
+
+```
+
+
+
+Résultat :
+
+
+
+```text
+
+&#x20;count
+
+\-------
+
+&#x20;    3
+
+```
+
+
+
+Vérification du contenu :
+
+
+
+```text
+
+&#x20;id |     texte
+
+\----+----------------
+
+&#x20; 1 | premiere note
+
+&#x20;34 | deuxieme note
+
+&#x20;35 | troisieme note
+
+```
+
+
+
+
+
+
+
